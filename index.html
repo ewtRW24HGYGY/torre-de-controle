@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Torre de Controle</title>
+<meta name="description" content="Gestão de projetos da equipe: kanban, prioridades e dependências.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: sidebar de projetos à esquerda + barra de visão/filtros + área de trabalho (quadro, lista ou visão geral). No celular a sidebar vira faixa horizontal. */
+:root{
+  --bg:#f2f5f3; --surface:#ffffff; --sunk:#e7ece9; --fg:#16201c; --muted:#5b6a64; --line:#d3dbd7;
+  --accent:#0b6b5c; --accent-fg:#ffffff; --accent-soft:#d6ece6;
+  --p0:#c92a2a; --p1:#d9480f; --p2:#1c6fc4; --p3:#6f7c77; --ok:#2b8a3e;
+  --shadow:0 1px 2px rgba(20,40,32,.08),0 2px 8px rgba(20,40,32,.06);
+  --f-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1513; --surface:#17201c; --sunk:#0b100e; --fg:#e4ebe8; --muted:#93a19b; --line:#29342f;
+  --accent:#43c2a7; --accent-fg:#05211a; --accent-soft:#163a31;
+  --p0:#ff6b6b; --p1:#ff922b; --p2:#5aaef5; --p3:#8b9993; --ok:#51cf66;
+  --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1513; --surface:#17201c; --sunk:#0b100e; --fg:#e4ebe8; --muted:#93a19b; --line:#29342f;
+  --accent:#43c2a7; --accent-fg:#05211a; --accent-soft:#163a31;
+  --p0:#ff6b6b; --p1:#ff922b; --p2:#5aaef5; --p3:#8b9993; --ok:#51cf66;
+  --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0}
+[hidden]{display:none!important}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-size:12px;letter-spacing:.02em}
+
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100%}
+aside{border-right:1px solid var(--line);padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:16px;display:flex;flex-direction:column;gap:18px;background:var(--surface)}
+.brand{font-family:var(--f-display);font-weight:700;font-size:20px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.brand svg{color:var(--accent)}
+.side-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.icon-btn{border:1px solid var(--line);background:transparent;border-radius:6px;width:26px;height:26px;display:inline-grid;place-items:center;color:var(--muted)}
+.icon-btn:hover{color:var(--fg);border-color:var(--muted)}
+.proj-list{display:flex;flex-direction:column;gap:2px;list-style:none;margin:0;padding:0}
+.proj-btn{width:100%;display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;background:transparent;border-radius:7px;text-align:left}
+.proj-btn:hover{background:var(--sunk)}
+.proj-btn[aria-current="true"]{background:var(--accent-soft);font-weight:600}
+.proj-btn .dot{width:10px;height:10px;border-radius:3px;flex:none}
+.proj-btn .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj-btn .count{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.proj-edit{opacity:0;border:0;background:transparent;color:var(--muted);padding:2px 4px;border-radius:4px}
+.proj-row{display:flex;align-items:center}
+.proj-row:hover .proj-edit,.proj-edit:focus-visible{opacity:1}
+.side-foot{margin-top:auto;font-size:12px;color:var(--muted)}
+.status-pill{display:inline-flex;align-items:center;gap:6px}
+.status-pill i{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.status-pill.local i{background:var(--p1)}
+
+main{min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding-block:16px;padding-left:24px;padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line)}
+.title-wrap h1{font-family:var(--f-display);font-weight:700;font-size:24px;margin:0;letter-spacing:-.015em;text-wrap:balance}
+.title-wrap p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.tabs{display:flex;background:var(--sunk);padding:3px;border-radius:9px;gap:2px}
+.tabs button{border:0;background:transparent;padding:6px 12px;border-radius:7px;font-weight:500;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-block:12px;padding-left:24px;padding-right:max(16px,env(safe-area-inset-right,0px))}
+.field{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:7px 10px;min-width:0}
+.field:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+#q{width:220px;max-width:100%}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:7px 14px;font-weight:500;display:inline-flex;gap:6px;align-items:center}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.danger{color:var(--p0);border-color:color-mix(in srgb,var(--p0) 40%,var(--line))}
+.btn.danger.solid{background:var(--p0);color:#fff;border-color:var(--p0)}
+.spacer{flex:1}
+.view{flex:1;min-height:0;padding-block:4px 24px;padding-left:24px;padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* Quadro */
+.board{display:grid;grid-template-columns:repeat(5,minmax(240px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px;align-items:start}
+.col{background:var(--sunk);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:160px;border:1px solid transparent;transition:border-color .12s,background .12s}
+.col.over{border-color:var(--accent);background:var(--accent-soft)}
+.col.refuse{border-color:var(--p0)}
+.col-head{display:flex;align-items:center;gap:8px;padding:2px 4px 4px}
+.col-head h3{margin:0;font-size:13px;font-weight:600}
+.col-head .n{font-family:var(--f-mono);font-size:11px;color:var(--muted);background:var(--surface);border-radius:10px;padding:1px 7px}
+.col-head .icon-btn{margin-left:auto;background:var(--surface)}
+.col-empty{color:var(--muted);font-size:12px;text-align:center;padding:16px 8px;border:1px dashed var(--line);border-radius:8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 11px;display:flex;flex-direction:column;gap:7px;cursor:pointer;box-shadow:var(--shadow);text-align:left;width:100%}
+.card:hover{border-color:var(--muted)}
+.card.dragging{opacity:.45}
+.card.blocked{border-style:dashed;background:repeating-linear-gradient(-45deg,var(--surface) 0 8px,color-mix(in srgb,var(--sunk) 70%,var(--surface)) 8px 16px)}
+.card.done h4{color:var(--muted);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--muted) 50%,transparent)}
+.card-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.key{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.key i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.card h4{margin:0;font-size:14px;font-weight:500;line-height:1.35;overflow-wrap:anywhere}
+.card-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:5px;padding:1px 7px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.prio-0{color:var(--p0);background:color-mix(in srgb,var(--p0) 13%,transparent)}
+.prio-1{color:var(--p1);background:color-mix(in srgb,var(--p1) 13%,transparent)}
+.prio-2{color:var(--p2);background:color-mix(in srgb,var(--p2) 13%,transparent)}
+.prio-3{color:var(--p3);background:color-mix(in srgb,var(--p3) 15%,transparent)}
+.chip.lock{color:var(--fg);background:var(--sunk);border:1px solid var(--line)}
+.chip.unlock{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+.chip.late{color:var(--p0)}
+.avatar{margin-left:auto;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--fg);display:grid;place-items:center;font-size:10px;font-weight:600}
+
+/* Lista */
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:820px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;background:var(--sunk)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--sunk)}
+tbody tr:last-child td{border-bottom:0}
+td.t{font-weight:500;max-width:320px}
+.status-tag{font-size:12px;color:var(--muted);white-space:nowrap}
+.status-tag::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--line)}
+.st-doing::before{background:var(--p2)}.st-review::before{background:var(--p1)}.st-done::before{background:var(--ok)}.st-todo::before{background:var(--muted)}
+
+/* Visão geral */
+.ov{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px;align-items:start}
+.ov h2{font-family:var(--f-display);font-size:17px;font-weight:600;margin:0 0 10px}
+.proj-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;cursor:pointer;text-align:left}
+.pcard:hover{border-color:var(--muted)}
+.pcard-head{display:flex;align-items:center;gap:8px}
+.pcard-head b{font-family:var(--f-display);font-size:16px;font-weight:600}
+.pcard-head .mono{margin-left:auto;color:var(--muted)}
+.stack{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--sunk)}
+.stack span{display:block;height:100%}
+.s-backlog{background:var(--line)}.s-todo{background:var(--p3)}.s-doing{background:var(--p2)}.s-review{background:var(--p1)}.s-done{background:var(--ok)}
+.pct{font-family:var(--f-display);font-size:26px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.pct small{font-family:var(--f-body);font-size:12px;font-weight:400;color:var(--muted);margin-left:6px}
+.pstats{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.pstats b{color:var(--fg);font-variant-numeric:tabular-nums}
+.pstats .alert b{color:var(--p0)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.panel + .panel{margin-top:16px}
+.panel h2{padding:12px 14px 0}
+.panel p.hint{margin:-6px 14px 8px;color:var(--muted);font-size:12px}
+.row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--line);cursor:pointer;width:100%;background:transparent;border-left:0;border-right:0;border-bottom:0;text-align:left}
+.row:hover{background:var(--sunk)}
+.row .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .rank{font-family:var(--f-mono);font-size:11px;color:var(--muted);width:18px}
+.empty-small{padding:14px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+.blk{font-size:12px;color:var(--muted);padding:0 14px 10px 42px;margin-top:-4px}
+
+/* Estado vazio */
+.empty{max-width:520px;margin:40px auto;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
+.empty h2{font-family:var(--f-display);font-size:22px;margin:0}
+.empty p{color:var(--muted);margin:0}
+.skeleton{height:120px;border-radius:10px;background:var(--sunk);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.55}}
+
+/* Modal */
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);padding:0;width:min(640px,calc(100vw - 32px));max-height:calc(100dvh - 32px);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+dialog::backdrop{background:rgba(10,20,16,.45)}
+.m-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.m-head h2{margin:0;font-family:var(--f-display);font-size:18px;font-weight:600;flex:1}
+.m-body{padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:14px;overflow-y:auto}
+.m-body .full{grid-column:1/-1}
+.m-foot{display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
+label.lbl{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
+label.lbl .field{font-weight:400;color:var(--fg);font-size:14px}
+textarea.field{resize:vertical;min-height:70px}
+.title-input{font-family:var(--f-display);font-size:18px !important;font-weight:600 !important}
+.seg{display:flex;gap:4px;flex-wrap:wrap}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted)}
+.seg input:checked + label{border-color:currentColor}
+.seg input:checked + label.prio-0,.seg input:checked + label.prio-1,.seg input:checked + label.prio-2,.seg input:checked + label.prio-3{}
+.seg label.prio-0{color:var(--p0)}.seg label.prio-1{color:var(--p1)}.seg label.prio-2{color:var(--p2)}.seg label.prio-3{color:var(--p3)}
+.seg input:not(:checked) + label{background:transparent;border-color:var(--line)}
+.seg input:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px}
+.deps{display:flex;flex-direction:column;gap:6px}
+.dep{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:13px}
+.dep .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dep button{border:0;background:transparent;color:var(--muted);padding:2px 6px;border-radius:4px}
+.dep button:hover{color:var(--p0)}
+.dep-search{position:relative}
+.dep-results{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);max-height:220px;overflow-y:auto;z-index:5}
+.dep-results button{display:flex;gap:8px;align-items:center;width:100%;border:0;background:transparent;padding:7px 10px;text-align:left;font-size:13px}
+.dep-results button:hover:not(:disabled){background:var(--sunk)}
+.dep-results button:disabled{opacity:.5;cursor:not-allowed}
+.dep-results .why{margin-left:auto;font-size:11px;color:var(--p0)}
+.sub{font-size:12px;color:var(--muted)}
+.err{color:var(--p0);font-size:13px;font-weight:500}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.swatches button{width:28px;height:28px;border-radius:7px;border:2px solid transparent}
+.swatches button[aria-pressed="true"]{border-color:var(--fg)}
+.confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:13px;max-width:calc(100vw - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:50}
+
+@media (max-width:860px){
+  .app{grid-template-columns:1fr}
+  aside{border-right:0;border-bottom:1px solid var(--line);padding-block:12px;padding-right:max(16px,env(safe-area-inset-right,0px));gap:10px}
+  .proj-list{flex-direction:row;overflow-x:auto;gap:4px;padding-bottom:2px}
+  .proj-btn{white-space:nowrap;border:1px solid var(--line)}
+  .proj-edit{display:none}
+  .side-foot{display:none}
+  .topbar,.filters,.view{padding-left:max(16px,env(safe-area-inset-left,0px))}
+  .ov{grid-template-columns:1fr}
+  #q{width:100%}
+  .m-body{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+</head>
+<body>
+
+<div class="app">
+  <aside>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2v4M8 6h8l-1 6H9z"/><path d="M9 12l-2 10h10l-2-10"/><path d="M4 4l2 2M20 4l-2 2"/></svg>
+      Torre de Controle
+    </div>
+    <div class="side-label"><span>Projetos</span><button class="icon-btn" id="addProj" title="Novo projeto" aria-label="Novo projeto"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg></button></div>
+    <ul class="proj-list" id="projList"></ul>
+    <div class="side-foot"><span class="status-pill" id="syncPill"><i></i><span>Conectando…</span></span></div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div class="title-wrap"><h1 id="viewTitle">Todos os projetos</h1><p id="viewSub"> </p></div>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-view="overview" aria-selected="false">Visão geral</button>
+        <button role="tab" data-view="board" aria-selected="true">Quadro</button>
+        <button role="tab" data-view="list" aria-selected="false">Lista</button>
+      </div>
+    </div>
+    <div class="filters">
+      <input class="field" id="q" type="search" placeholder="Buscar tarefa ou chave (ex: APP-12)" aria-label="Buscar">
+      <select class="field" id="fPrio" aria-label="Prioridade">
+        <option value="">Toda prioridade</option>
+        <option value="0">Urgente</option><option value="1">Alta</option><option value="2">Média</option><option value="3">Baixa</option>
+      </select>
+      <select class="field" id="fWho" aria-label="Responsável"><option value="">Todos os responsáveis</option></select>
+      <select class="field" id="fBlock" aria-label="Bloqueio">
+        <option value="">Bloqueadas e livres</option><option value="blocked">Só bloqueadas</option><option value="free">Só livres</option>
+      </select>
+      <span class="spacer"></span>
+      <button class="btn primary" id="addTask"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>Nova tarefa</button>
+    </div>
+    <div class="view" id="view"></div>
+  </main>
+</div>
+
+<dialog id="dlg"></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+const STATUSES=[{id:'backlog',label:'Backlog'},{id:'todo',label:'A fazer'},{id:'doing',label:'Em andamento'},{id:'review',label:'Revisão'},{id:'done',label:'Concluído'}];
+const ACTIVE=new Set(['doing','review','done']);
+const PRIOS=['Urgente','Alta','Média','Baixa'];
+const COLORS=['#2f6fde','#d9480f','#2b8a3e','#ae3ec9','#c2255c','#0c8599','#d49a00','#5f3dc4'];
+const S={projects:new Map(),tasks:new Map(),view:'board',project:'all',q:'',prio:'',who:'',block:'',mode:'loading',canWrite:true,loaded:{p:false,t:false}};
+let DB=null;
+
+try{const v=localStorage.getItem('tc_view');if(v)S.view=v;const p=localStorage.getItem('tc_proj');if(p)S.project=p;}catch(e){}
+function remember(){try{localStorage.setItem('tc_view',S.view);localStorage.setItem('tc_proj',S.project);}catch(e){}}
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const proj=id=>S.projects.get(id);
+const keyOf=t=>{const p=proj(t.projectId);return (p?p.code:'???')+'-'+(t.num||'?')};
+const initials=n=>n.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+const today=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
+function fmtDate(s){if(!s)return'';const [y,m,d]=s.split('-');return d+'/'+m}
+function isLate(t){return t.due&&t.status!=='done'&&new Date(t.due+'T00:00:00')<today()}
+function blockers(t){return (t.deps||[]).map(id=>S.tasks.get(id)).filter(d=>d&&d.status!=='done')}
+function dependents(t){return [...S.tasks.values()].filter(x=>(x.deps||[]).includes(t.id))}
+function reaches(fromId,targetId,seen=new Set()){ // fromId depende (transitivamente) de targetId?
+  if(fromId===targetId)return true; if(seen.has(fromId))return false; seen.add(fromId);
+  const f=S.tasks.get(fromId); return !!f&&(f.deps||[]).some(d=>reaches(d,targetId,seen));
+}
+function sortTasks(a,b){return (a.priority-b.priority)||((a.due||'9999')<(b.due||'9999')?-1:(a.due||'9999')>(b.due||'9999')?1:0)||(a.createdAt||0)-(b.createdAt||0)}
+const projList=()=>[...S.projects.values()].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+
+function filtered(){
+  const q=S.q.trim().toLowerCase();
+  return [...S.tasks.values()].filter(t=>{
+    if(S.project!=='all'&&t.projectId!==S.project)return false;
+    if(!proj(t.projectId))return false;
+    if(S.prio!==''&&String(t.priority)!==S.prio)return false;
+    if(S.who&&(t.assignee||'')!==S.who)return false;
+    if(S.block){const b=blockers(t).length>0;if(S.block==='blocked'&&!b)return false;if(S.block==='free'&&b)return false}
+    if(q&&!(t.title.toLowerCase().includes(q)||keyOf(t).toLowerCase().includes(q)||(t.desc||'').toLowerCase().includes(q)))return false;
+    return true;
+  });
+}
+
+let toastTimer;
+function toast(msg){const el=$('#toast');el.textContent=msg;el.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.hidden=true,4200)}
+
+/* ---------- persistência ---------- */
+function handleErr(e){
+  console.error(e);
+  const m=String((e&&e.message)||'');
+  if(/row-level security|permission/i.test(m))toast('Sem permissão para salvar. Confira as políticas do banco no Supabase.');
+  else toast('Não foi possível salvar agora. Confira a conexão e tente de novo.');
+}
+async function sbWrite(fn){if(!DB)return;try{const {error}=await fn();if(error)throw error}catch(e){handleErr(e)}}
+async function putTask(t){S.tasks.set(t.id,t);render();const {id,...b}=t;await sbWrite(()=>DB.from('items').upsert({id,kind:'task',data:b,updated_at:new Date().toISOString()}))}
+async function delTask(id){S.tasks.delete(id);render();await sbWrite(()=>DB.from('items').delete().eq('id',id))}
+async function putProject(p){S.projects.set(p.id,p);render();const {id,...b}=p;await sbWrite(()=>DB.from('items').upsert({id,kind:'project',data:b,updated_at:new Date().toISOString()}))}
+async function delProject(id){S.projects.delete(id);render();await sbWrite(()=>DB.from('items').delete().eq('id',id))}
+
+async function removeTask(t){
+  for(const d of dependents(t)){await putTask({...d,deps:d.deps.filter(x=>x!==t.id),updatedAt:Date.now()})}
+  await delTask(t.id);
+  toast(keyOf(t)+' excluída.');
+}
+async function removeProject(p){
+  const ts=[...S.tasks.values()].filter(t=>t.projectId===p.id);
+  for(const t of ts){for(const d of dependents(t)){if(d.projectId!==p.id)await putTask({...d,deps:d.deps.filter(x=>x!==t.id)})}await delTask(t.id)}
+  await delProject(p.id);
+  if(S.project===p.id)S.project='all';
+  toast('Projeto '+p.name+' excluído.');render();
+}
+
+async function moveTask(id,status){
+  const t=S.tasks.get(id);if(!t||t.status===status)return;
+  if(ACTIVE.has(status)){const b=blockers(t);if(b.length){toast(keyOf(t)+' está bloqueada por '+b.map(keyOf).join(', ')+'. Conclua essas primeiro.');return}}
+  const wasDone=t.status==='done';
+  await putTask({...t,status,updatedAt:Date.now()});
+  if(status==='done'&&!wasDone){
+    const freed=dependents(t).filter(d=>blockers(d).length===0&&d.status!=='done');
+    if(freed.length)toast(keyOf(t)+' concluída. Liberou '+freed.map(keyOf).join(', ')+'.');
+  }
+}
+
+/* ---------- render ---------- */
+function render(){renderSide();renderHead();renderView()}
+
+function renderSide(){
+  const counts={};for(const t of S.tasks.values())if(t.status!=='done')counts[t.projectId]=(counts[t.projectId]||0)+1;
+  const total=Object.values(counts).reduce((a,b)=>a+b,0);
+  let h=`<li><button class="proj-btn" data-proj="all" aria-current="${S.project==='all'}"><span class="dot" style="background:var(--fg)"></span><span class="name">Todos os projetos</span><span class="count">${total}</span></button></li>`;
+  for(const p of projList()){
+    h+=`<li class="proj-row"><button class="proj-btn" data-proj="${esc(p.id)}" aria-current="${S.project===p.id}"><span class="dot" style="background:${esc(p.color)}"></span><span class="name">${esc(p.name)}</span><span class="count">${counts[p.id]||0}</span></button>${S.canWrite?`<button class="proj-edit" data-editproj="${esc(p.id)}" title="Editar projeto" aria-label="Editar ${esc(p.name)}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>`:''}</li>`;
+  }
+  $('#projList').innerHTML=h;
+  $('#addProj').hidden=!S.canWrite;
+  const pill=$('#syncPill');
+  pill.classList.toggle('local',S.mode!=='live');
+  pill.querySelector('span').textContent=S.mode==='live'?'Sincronizado com a equipe':S.mode==='setup'?'Banco não configurado':S.mode==='error'?'Erro de conexão':'Conectando…';
+}
+
+function renderHead(){
+  const p=S.project==='all'?null:proj(S.project);
+  if(S.project!=='all'&&!p&&S.loaded.p)S.project='all';
+  $('#viewTitle').textContent=p?p.name:'Todos os projetos';
+  const ts=[...S.tasks.values()].filter(t=>(!p||t.projectId===p.id)&&proj(t.projectId));
+  const open=ts.filter(t=>t.status!=='done');
+  const bl=open.filter(t=>blockers(t).length).length;
+  $('#viewSub').textContent=ts.length?`${open.length} abertas · ${ts.length-open.length} concluídas · ${bl} bloqueadas`:(p?'Sem tarefas ainda':' ');
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===S.view));
+  const who=[...new Set([...S.tasks.values()].map(t=>t.assignee).filter(Boolean))].sort();
+  const sel=$('#fWho');const cur=S.who;
+  sel.innerHTML='<option value="">Todos os responsáveis</option>'+who.map(w=>`<option${w===cur?' selected':''}>${esc(w)}</option>`).join('');
+  $('#addTask').hidden=!S.canWrite||!S.projects.size;
+  $('.filters').hidden=S.view==='overview';
+}
+
+function cardHTML(t){
+  const p=proj(t.projectId);const b=blockers(t);const deps=(t.deps||[]).length;
+  const meta=[];
+  if(b.length)meta.push(`<span class="chip lock" title="Bloqueada por ${esc(b.map(keyOf).join(', '))}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Bloqueada · ${b.length}</span>`);
+  else if(deps&&t.status!=='done')meta.push(`<span class="chip unlock">Dependências ok</span>`);
+  if(t.due)meta.push(`<span class="${isLate(t)?'chip late':''}">${isLate(t)?'Atrasada · ':''}${fmtDate(t.due)}</span>`);
+  const nDep=dependents(t).filter(d=>d.status!=='done').length;
+  if(nDep&&t.status!=='done')meta.push(`<span title="Outras tarefas esperam por esta">Trava ${nDep}</span>`);
+  if(t.assignee)meta.push(`<span class="avatar" title="${esc(t.assignee)}">${esc(initials(t.assignee))}</span>`);
+  return `<article class="card${b.length?' blocked':''}${t.status==='done'?' done':''}" draggable="${S.canWrite}" data-task="${esc(t.id)}" tabindex="0">
+    <div class="card-top"><span class="key mono"><i style="background:${esc(p?p.color:'#888')}"></i>${esc(keyOf(t))}</span><span class="chip prio-${t.priority}">${PRIOS[t.priority]}</span></div>
+    <h4>${esc(t.title)}</h4>
+    ${meta.length?`<div class="card-meta">${meta.join('')}</div>`:''}
+  </article>`;
+}
+
+function renderView(){
+  const v=$('#view');
+  if(S.mode==='setup'){$('.filters').hidden=true;v.innerHTML=`<div class="empty"><h2>Falta conectar o banco de dados</h2><p>Preencha o arquivo <span class="mono">config.js</span> com a URL e a chave pública do seu projeto Supabase. O passo a passo está no README do repositório.</p></div>`;return}
+  if(S.mode==='error'){$('.filters').hidden=true;v.innerHTML=`<div class="empty"><h2>Não consegui ler o banco</h2><p>${esc(S.err)}</p><p>Confira se o script <span class="mono">supabase-setup.sql</span> foi executado no Supabase.</p><button class="btn" id="retry">Tentar de novo</button></div>`;$('#retry').onclick=()=>loadAll();return}
+  if(!S.loaded.p&&S.mode==='loading'){v.innerHTML='<div class="board">'+STATUSES.map(()=>'<div class="skeleton"></div>').join('')+'</div>';return}
+  if(!S.projects.size){
+    v.innerHTML=`<div class="empty"><h2>Comece cadastrando seus projetos</h2><p>Cada projeto ganha um código curto (ex: APP) e suas tarefas recebem chaves como APP-1, APP-2. Depois é só criar tarefas, definir prioridade e ligar as dependências.</p>${S.canWrite?'<button class="btn primary" id="emptyAdd">Criar primeiro projeto</button>':'<p>Ninguém cadastrou projetos ainda.</p>'}</div>`;
+    const b=$('#emptyAdd');if(b)b.onclick=()=>openProject();return;
+  }
+  if(S.view==='overview')return renderOverview(v);
+  const ts=filtered().sort(sortTasks);
+  if(S.view==='list')return renderList(v,ts);
+  v.innerHTML='<div class="board">'+STATUSES.map(s=>{
+    const items=ts.filter(t=>t.status===s.id);
+    return `<section class="col" data-col="${s.id}"><div class="col-head"><h3>${s.label}</h3><span class="n">${items.length}</span>${S.canWrite?`<button class="icon-btn" data-addin="${s.id}" title="Nova tarefa em ${s.label}" aria-label="Nova tarefa em ${s.label}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg></button>`:''}</div>${items.map(cardHTML).join('')||'<div class="col-empty">Arraste tarefas para cá</div>'}</section>`;
+  }).join('')+'</div>';
+}
+
+function renderList(v,ts){
+  if(!ts.length){v.innerHTML='<div class="empty"><p>Nenhuma tarefa com esses filtros.</p></div>';return}
+  v.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Chave</th><th>Tarefa</th><th>Status</th><th>Prioridade</th><th>Responsável</th><th>Prazo</th><th>Depende de</th></tr></thead><tbody>${ts.map(t=>{
+    const b=blockers(t);const deps=(t.deps||[]).map(id=>S.tasks.get(id)).filter(Boolean);
+    return `<tr data-task="${esc(t.id)}" tabindex="0"><td class="mono">${esc(keyOf(t))}</td><td class="t">${esc(t.title)}</td><td><span class="status-tag st-${t.status}">${STATUSES.find(s=>s.id===t.status).label}</span></td><td><span class="chip prio-${t.priority}">${PRIOS[t.priority]}</span></td><td>${esc(t.assignee||'—')}</td><td class="${isLate(t)?'chip late':''}">${t.due?fmtDate(t.due):'—'}</td><td>${deps.length?deps.map(d=>`<span class="mono" style="${d.status==='done'?'color:var(--ok)':b.includes(d)?'color:var(--p0)':''}">${esc(keyOf(d))}</span>`).join(' '):'—'}</td></tr>`}).join('')}</tbody></table></div>`;
+}
+
+function renderOverview(v){
+  const all=[...S.tasks.values()].filter(t=>proj(t.projectId));
+  const cards=projList().map(p=>{
+    const ts=all.filter(t=>t.projectId===p.id);const n=ts.length||1;
+    const by=Object.fromEntries(STATUSES.map(s=>[s.id,ts.filter(t=>t.status===s.id).length]));
+    const open=ts.filter(t=>t.status!=='done');
+    const urg=open.filter(t=>t.priority===0).length,bl=open.filter(t=>blockers(t).length).length,late=open.filter(isLate).length;
+    const pct=ts.length?Math.round(by.done/ts.length*100):0;
+    return `<button class="pcard" data-proj="${esc(p.id)}"><div class="pcard-head"><span class="dot" style="width:10px;height:10px;border-radius:3px;background:${esc(p.color)}"></span><b>${esc(p.name)}</b><span class="mono">${esc(p.code)}</span></div>
+      <div class="pct">${pct}%<small>${by.done} de ${ts.length} concluídas</small></div>
+      <div class="stack" title="${STATUSES.map(s=>s.label+': '+by[s.id]).join(' · ')}">${STATUSES.map(s=>by[s.id]?`<span class="s-${s.id}" style="width:${by[s.id]/n*100}%"></span>`:'').join('')}</div>
+      <div class="pstats"><span><b>${by.doing+by.review}</b> em andamento</span><span class="${urg?'alert':''}"><b>${urg}</b> urgentes</span><span class="${bl?'alert':''}"><b>${bl}</b> bloqueadas</span>${late?`<span class="alert"><b>${late}</b> atrasadas</span>`:''}</div></button>`;
+  }).join('');
+  const next=all.filter(t=>t.status==='backlog'||t.status==='todo').filter(t=>!blockers(t).length).sort(sortTasks).slice(0,8);
+  const blocked=all.filter(t=>t.status!=='done'&&blockers(t).length).sort(sortTasks);
+  const legend=STATUSES.map(s=>`<span style="display:inline-flex;align-items:center;gap:5px"><i class="s-${s.id}" style="width:8px;height:8px;border-radius:2px;display:inline-block"></i>${s.label}</span>`).join('');
+  v.innerHTML=`<div class="ov"><div><h2>Projetos</h2><div class="proj-cards">${cards}</div><div class="pstats" style="margin-top:10px">${legend}</div></div>
+    <div><div class="panel"><h2>Próximas na fila</h2><p class="hint">Tarefas livres de bloqueio, por prioridade e prazo</p>${next.map((t,i)=>`<button class="row" data-task="${esc(t.id)}"><span class="rank">${i+1}</span><span class="mono" style="color:var(--muted)">${esc(keyOf(t))}</span><span class="t">${esc(t.title)}</span><span class="chip prio-${t.priority}">${PRIOS[t.priority]}</span></button>`).join('')||'<div class="empty-small">Nada na fila. Tudo em andamento ou concluído.</div>'}</div>
+    <div class="panel"><h2>Bloqueios</h2><p class="hint">Quem está esperando por quem</p>${blocked.map(t=>`<button class="row" data-task="${esc(t.id)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--p0);flex:none"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span class="mono" style="color:var(--muted)">${esc(keyOf(t))}</span><span class="t">${esc(t.title)}</span></button><div class="blk">espera ${blockers(t).map(b=>esc(keyOf(b))+' ('+STATUSES.find(s=>s.id===b.status).label.toLowerCase()+')').join(', ')}</div>`).join('')||'<div class="empty-small">Nenhuma tarefa bloqueada.</div>'}</div></div></div>`;
+}
+
+/* ---------- eventos ---------- */
+document.addEventListener('click',e=>{
+  const pe=e.target.closest('[data-editproj]');if(pe){openProject(proj(pe.dataset.editproj));return}
+  const pb=e.target.closest('[data-proj]');if(pb){S.project=pb.dataset.proj;if(pb.classList.contains('pcard'))S.view='board';remember();render();return}
+  const tab=e.target.closest('.tabs button');if(tab){S.view=tab.dataset.view;remember();render();return}
+  const ai=e.target.closest('[data-addin]');if(ai){openTask(null,ai.dataset.addin);return}
+  const tk=e.target.closest('#view [data-task]');if(tk){openTask(S.tasks.get(tk.dataset.task));return}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'){const tk=e.target.closest&&e.target.closest('#view [data-task]');if(tk&&tk.tagName!=='BUTTON'){openTask(S.tasks.get(tk.dataset.task))}}});
+$('#addProj').onclick=()=>openProject();
+$('#addTask').onclick=()=>openTask(null,'todo');
+$('#q').oninput=e=>{S.q=e.target.value;renderView()};
+$('#fPrio').onchange=e=>{S.prio=e.target.value;renderView()};
+$('#fWho').onchange=e=>{S.who=e.target.value;renderView()};
+$('#fBlock').onchange=e=>{S.block=e.target.value;renderView()};
+
+let dragId=null;
+document.addEventListener('dragstart',e=>{const c=e.target.closest&&e.target.closest('.card');if(!c)return;dragId=c.dataset.task;c.classList.add('dragging');e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',dragId)}catch(_){}});
+document.addEventListener('dragend',()=>{dragId=null;document.querySelectorAll('.dragging,.over,.refuse').forEach(el=>el.classList.remove('dragging','over','refuse'))});
+document.addEventListener('dragover',e=>{const col=e.target.closest&&e.target.closest('.col');if(!col||!dragId)return;e.preventDefault();
+  const t=S.tasks.get(dragId);const refuse=ACTIVE.has(col.dataset.col)&&blockers(t).length>0;
+  document.querySelectorAll('.col').forEach(c=>{if(c!==col)c.classList.remove('over','refuse')});col.classList.toggle('over',!refuse);col.classList.toggle('refuse',refuse)});
+document.addEventListener('drop',e=>{const col=e.target.closest&&e.target.closest('.col');if(!col||!dragId)return;e.preventDefault();const id=dragId;dragId=null;moveTask(id,col.dataset.col)});
+
+/* ---------- modal de projeto ---------- */
+const dlg=$('#dlg');
+function openProject(p){
+  const isNew=!p;const d=p?{...p}:{id:newId(),name:'',code:'',color:COLORS[S.projects.size%COLORS.length],createdAt:Date.now()};
+  const nTasks=p?[...S.tasks.values()].filter(t=>t.projectId===p.id).length:0;
+  dlg.innerHTML=`<form method="dialog" id="pf"><div class="m-head"><h2>${isNew?'Novo projeto':'Editar projeto'}</h2><button type="button" class="icon-btn" data-close aria-label="Fechar">✕</button></div>
+  <div class="m-body"><label class="lbl full">Nome<input class="field title-input" id="pName" value="${esc(d.name)}" placeholder="Ex: App de entregas" required maxlength="60"></label>
+  <label class="lbl">Código (2–5 letras)<input class="field mono" id="pCode" value="${esc(d.code)}" placeholder="APP" maxlength="5" style="text-transform:uppercase"></label>
+  <div class="lbl">Cor<div class="swatches">${COLORS.map(c=>`<button type="button" data-color="${c}" aria-pressed="${c===d.color}" style="background:${c}" aria-label="Cor ${c}"></button>`).join('')}</div></div>
+  <div class="full err" id="pErr"></div></div>
+  <div class="m-foot">${isNew?'':`<div id="pDel"><button type="button" class="btn danger" id="pDelBtn">Excluir projeto</button></div>`}<span class="spacer"></span><button type="button" class="btn" data-close>Cancelar</button><button class="btn primary" type="submit">${isNew?'Criar projeto':'Salvar'}</button></div></form>`;
+  dlg.showModal();
+  const nameEl=$('#pName'),codeEl=$('#pCode');let codeTouched=!isNew;
+  nameEl.oninput=()=>{if(!codeTouched)codeEl.value=nameEl.value.normalize('NFD').replace(/[^A-Za-z ]/g,'').split(/\s+/).filter(Boolean).map((w,i,a)=>a.length>1?w[0]:w.slice(0,3)).join('').slice(0,4).toUpperCase()};
+  codeEl.oninput=()=>{codeTouched=true;codeEl.value=codeEl.value.toUpperCase().replace(/[^A-Z0-9]/g,'')};
+  dlg.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{d.color=b.dataset.color;dlg.querySelectorAll('[data-color]').forEach(x=>x.setAttribute('aria-pressed',x===b))});
+  dlg.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>dlg.close());
+  const db=$('#pDelBtn');if(db)db.onclick=()=>{$('#pDel').innerHTML=`<span class="confirm">${nTasks?`Apaga também ${nTasks} tarefa${nTasks>1?'s':''}.`:'Confirmar?'} <button type="button" class="btn danger solid" id="pDelYes">Excluir</button><button type="button" class="btn" id="pDelNo">Não</button></span>`;$('#pDelYes').onclick=()=>{dlg.close();removeProject(p)};$('#pDelNo').onclick=()=>openProject(p)};
+  $('#pf').onsubmit=e=>{e.preventDefault();
+    const name=nameEl.value.trim(),code=codeEl.value.trim();
+    if(!name){$('#pErr').textContent='Dê um nome ao projeto.';return}
+    if(code.length<2){$('#pErr').textContent='O código precisa de 2 a 5 letras.';return}
+    if(projList().some(x=>x.id!==d.id&&x.code===code)){$('#pErr').textContent='Já existe um projeto com o código '+code+'.';return}
+    dlg.close();putProject({...d,name,code});if(isNew){S.project=d.id;remember()}toast(isNew?'Projeto '+name+' criado.':'Projeto salvo.');
+  };
+}
+
+/* ---------- modal de tarefa ---------- */
+function openTask(t,status){
+  const ro=!S.canWrite;const isNew=!t;
+  const defProj=S.project!=='all'&&proj(S.project)?S.project:(projList()[0]||{}).id;
+  const d=t?{...t,deps:[...(t.deps||[])]}:{id:newId(),projectId:defProj,title:'',desc:'',status:status||'todo',priority:2,assignee:'',due:'',deps:[],createdAt:Date.now()};
+  const who=[...new Set([...S.tasks.values()].map(x=>x.assignee).filter(Boolean))].sort();
+  dlg.innerHTML=`<form id="tf"><div class="m-head"><h2>${isNew?'Nova tarefa':`<span class="mono" style="color:var(--muted);font-size:13px;margin-right:8px">${esc(keyOf(t))}</span>Tarefa`}</h2><button type="button" class="icon-btn" data-close aria-label="Fechar">✕</button></div>
+  <div class="m-body">
+    <label class="lbl full">Título<input class="field title-input" id="tTitle" value="${esc(d.title)}" placeholder="O que precisa ser feito?" maxlength="140" ${ro?'disabled':''}></label>
+    <label class="lbl">Projeto<select class="field" id="tProj" ${ro?'disabled':''}>${projList().map(p=>`<option value="${esc(p.id)}"${p.id===d.projectId?' selected':''}>${esc(p.code)} · ${esc(p.name)}</option>`).join('')}</select></label>
+    <label class="lbl">Status<select class="field" id="tStatus" ${ro?'disabled':''}>${STATUSES.map(s=>`<option value="${s.id}"${s.id===d.status?' selected':''}>${s.label}</option>`).join('')}</select></label>
+    <div class="lbl full">Prioridade<div class="seg" role="radiogroup">${PRIOS.map((l,i)=>`<input type="radio" name="prio" id="pr${i}" value="${i}"${d.priority===i?' checked':''} ${ro?'disabled':''}><label for="pr${i}" class="prio-${i}">${l}</label>`).join('')}</div></div>
+    <label class="lbl">Responsável<input class="field" id="tWho" list="whoList" value="${esc(d.assignee)}" placeholder="Nome" maxlength="40" ${ro?'disabled':''}><datalist id="whoList">${who.map(w=>`<option value="${esc(w)}">`).join('')}</datalist></label>
+    <label class="lbl">Prazo<input class="field" id="tDue" type="date" value="${esc(d.due)}" ${ro?'disabled':''}></label>
+    <label class="lbl full">Descrição<textarea class="field" id="tDesc" rows="3" placeholder="Detalhes, links, critérios de pronto…" ${ro?'disabled':''}>${esc(d.desc)}</textarea></label>
+    <div class="lbl full">Depende de <span class="sub" style="font-weight:400">Esta tarefa só pode entrar em andamento quando estas estiverem concluídas</span><div class="deps" id="depList"></div>${ro?'':`<div class="dep-search"><input class="field" id="depQ" placeholder="+ Adicionar dependência (busque por nome ou chave)" autocomplete="off" style="width:100%"><div class="dep-results" id="depRes" hidden></div></div>`}</div>
+    ${t&&dependents(t).length?`<div class="lbl full">Bloqueia<div class="deps">${dependents(t).map(x=>`<div class="dep"><span class="mono">${esc(keyOf(x))}</span><span class="t">${esc(x.title)}</span><span class="status-tag st-${x.status}">${STATUSES.find(s=>s.id===x.status).label}</span></div>`).join('')}</div></div>`:''}
+    <div class="full err" id="tErr"></div>
+  </div>
+  <div class="m-foot">${!isNew&&!ro?`<div id="tDel"><button type="button" class="btn danger" id="tDelBtn">Excluir</button></div>`:''}<span class="spacer"></span><button type="button" class="btn" data-close>${ro?'Fechar':'Cancelar'}</button>${ro?'':`<button class="btn primary" type="submit">${isNew?'Criar tarefa':'Salvar'}</button>`}</div></form>`;
+  dlg.showModal();
+  if(isNew)setTimeout(()=>$('#tTitle').focus(),30);
+  dlg.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>dlg.close());
+
+  function drawDeps(){
+    $('#depList').innerHTML=d.deps.map(id=>S.tasks.get(id)).filter(Boolean).map(x=>`<div class="dep"><span class="mono">${esc(keyOf(x))}</span><span class="t">${esc(x.title)}</span><span class="status-tag st-${x.status}">${STATUSES.find(s=>s.id===x.status).label}</span>${ro?'':`<button type="button" data-rm="${esc(x.id)}" aria-label="Remover dependência">✕</button>`}</div>`).join('')||'<span class="sub" style="font-weight:400">Nenhuma dependência.</span>';
+    $('#depList').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{d.deps=d.deps.filter(x=>x!==b.dataset.rm);drawDeps()});
+  }
+  drawDeps();
+  const dq=$('#depQ'),dr=$('#depRes');
+  if(dq){
+    const show=()=>{
+      const q=dq.value.trim().toLowerCase();
+      const opts=[...S.tasks.values()].filter(x=>x.id!==d.id&&!d.deps.includes(x.id)&&proj(x.projectId)).filter(x=>!q||x.title.toLowerCase().includes(q)||keyOf(x).toLowerCase().includes(q)).sort((a,b)=>(a.projectId===d.projectId?0:1)-(b.projectId===d.projectId?0:1)||sortTasks(a,b)).slice(0,30);
+      dr.innerHTML=opts.map(x=>{const cyc=reaches(x.id,d.id);return `<button type="button" data-add="${esc(x.id)}" ${cyc?'disabled':''}><span class="mono">${esc(keyOf(x))}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.title)}</span>${cyc?'<span class="why">criaria ciclo</span>':''}</button>`}).join('')||'<div class="empty-small" style="border:0">Nenhuma tarefa encontrada.</div>';
+      dr.hidden=false;
+      dr.querySelectorAll('[data-add]').forEach(b=>b.onmousedown=ev=>{ev.preventDefault();d.deps.push(b.dataset.add);dq.value='';drawDeps();show()});
+    };
+    dq.onfocus=show;dq.oninput=show;dq.onblur=()=>setTimeout(()=>dr.hidden=true,120);
+    dq.onkeydown=ev=>{if(ev.key==='Escape'){ev.stopPropagation();dr.hidden=true}if(ev.key==='Enter'){ev.preventDefault();const f=dr.querySelector('[data-add]:not(:disabled)');if(f)f.dispatchEvent(new MouseEvent('mousedown'))}};
+  }
+  const delb=$('#tDelBtn');if(delb)delb.onclick=()=>{const n=dependents(t).length;$('#tDel').innerHTML=`<span class="confirm">${n?`${n} tarefa${n>1?'s':''} perde${n>1?'m':''} esta dependência.`:'Excluir esta tarefa?'} <button type="button" class="btn danger solid" id="tDelYes">Excluir</button><button type="button" class="btn" id="tDelNo">Não</button></span>`;$('#tDelYes').onclick=()=>{dlg.close();removeTask(t)};$('#tDelNo').onclick=()=>{$('#tDel').innerHTML='<button type="button" class="btn danger" id="tDelBtn2">Excluir</button>';$('#tDelBtn2').onclick=delb.onclick}};
+
+  $('#tf').onsubmit=e=>{e.preventDefault();if(ro)return;
+    const title=$('#tTitle').value.trim();
+    if(!title){$('#tErr').textContent='Escreva um título para a tarefa.';return}
+    const nt={...d,title,projectId:$('#tProj').value,status:$('#tStatus').value,priority:+(dlg.querySelector('input[name=prio]:checked')||{value:2}).value,assignee:$('#tWho').value.trim(),due:$('#tDue').value,desc:$('#tDesc').value.trim(),updatedAt:Date.now()};
+    const open=nt.deps.map(id=>S.tasks.get(id)).filter(x=>x&&x.status!=='done');
+    if(ACTIVE.has(nt.status)&&open.length&&(isNew||t.status!==nt.status||(t.deps||[]).length!==nt.deps.length)){$('#tErr').textContent='Não dá para colocar em "'+STATUSES.find(s=>s.id===nt.status).label+'": ainda depende de '+open.map(keyOf).join(', ')+'. Deixe em Backlog ou A fazer.';return}
+    if(isNew||t.projectId!==nt.projectId){nt.num=Math.max(0,...[...S.tasks.values()].filter(x=>x.projectId===nt.projectId&&x.id!==nt.id).map(x=>x.num||0))+1}
+    const wasDone=t&&t.status==='done';
+    dlg.close();putTask(nt);
+    if(nt.status==='done'&&!wasDone&&!isNew){const freed=dependents(nt).filter(x=>blockers(x).length===0&&x.status!=='done');if(freed.length){toast(keyOf(nt)+' concluída. Liberou '+freed.map(keyOf).join(', ')+'.');return}}
+    toast(isNew?keyOf(nt)+' criada.':keyOf(nt)+' salva.');
+  };
+}
+
+/* ---------- conexão (Supabase) ---------- */
+function applyRow(r){const b=r.data||{};if(r.kind==='project')S.projects.set(r.id,{id:r.id,...b});else if(r.kind==='task')S.tasks.set(r.id,{id:r.id,deps:[],...b})}
+async function loadAll(){
+  let res;
+  try{res=await DB.from('items').select('id,kind,data')}catch(e){res={error:e}}
+  if(res.error){S.mode='error';S.err=String(res.error.message||res.error);S.canWrite=false;S.loaded.p=S.loaded.t=true;render();return}
+  S.projects=new Map();S.tasks=new Map();res.data.forEach(applyRow);
+  S.mode='live';S.canWrite=true;S.loaded.p=S.loaded.t=true;render();
+}
+async function init(){
+  render();
+  const cfg=window.TORRE_CONFIG||{};
+  const configured=cfg.supabaseUrl&&cfg.supabaseAnonKey&&!cfg.supabaseUrl.includes('SEU-PROJETO');
+  if(!window.supabase||!configured){S.mode='setup';S.canWrite=false;S.loaded.p=S.loaded.t=true;render();return}
+  DB=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey);
+  await loadAll();
+  DB.channel('items-changes')
+    .on('postgres_changes',{event:'*',schema:'public',table:'items'},p=>{
+      if(p.eventType==='DELETE'){const id=p.old&&p.old.id;S.projects.delete(id);S.tasks.delete(id)}
+      else applyRow(p.new);
+      render();
+    })
+    .subscribe();
+  // Ao voltar para a aba depois de um tempo, recarrega tudo para não perder nada.
+  let last=Date.now();
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-last>30000){last=Date.now();loadAll()}});
+}
+init();
+</script>
+
+</body>
+</html>
